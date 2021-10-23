@@ -1,16 +1,17 @@
 #define DATA_PIN 12
 #define LATCH_PIN 11
 #define CLOCK_PIN 10
-#define BUTTON_PIN 9 
+#define BUTTON_PIN 9 //CHANGE TO NEW BOARD
 #define COL_18 8
 #define COL_17 7
 
-///////GOOD STUFF HERE////////
+//////////GOOD STUFF HERE///////
 //CHANGE THIS TO CHANGE SCROLLING TEXT PHRASE
-const char* phrase = "RWOF";
+//(Capitilization matters, currently no support for some characters sorry, coming soon)
+const char* phrase = "GHOSTCABBIT";
 
-//Can draw static image using this, LEDs active low
-//(Change loop function to not clear bitmap)
+//Can draw static image using this, LED active low
+//(Change loop function to not clear bitmap and not text scroll)
 volatile uint8_t bitmap[16][18] = {
   {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
   {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
@@ -29,9 +30,6 @@ volatile uint8_t bitmap[16][18] = {
   {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
   {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
 };
-
-
-
 volatile int frame_start = 0;
 volatile int frame_end = 0;
 volatile int dt = 0;
@@ -39,6 +37,7 @@ volatile int dt = 0;
 
 
 const uint8_t alphabet[][7][7] PROGMEM = { //Font 1 DOS font A-Z only
+  {{1,1,1,1,1,1,1},{1,1,1,1,1,1,1},{1,1,1,1,1,1,1},{1,1,1,1,1,1,1},{1,1,1,1,1,1,1},{1,1,1,1,1,1,1},{1,1,1,1,1,1,1}},//as SPACE
   {{1,0,0,0,0,0,1},{0,0,1,1,1,0,0},{0,0,1,1,1,0,0},{0,0,0,0,0,0,0},{0,0,1,1,1,0,0},{0,0,1,1,1,0,0},{0,0,1,1,1,0,0}},//A 
   {{0,0,0,0,0,0,1},{1,0,0,1,1,0,0},{1,0,0,1,1,0,0},{1,0,0,0,0,0,1},{1,0,0,1,1,0,0},{1,0,0,1,1,0,0},{0,0,0,0,0,0,1}},//B 
   {{1,0,0,0,0,0,1},{0,0,1,1,1,0,0},{0,0,1,1,1,1,1},{0,0,1,1,1,1,1},{0,0,1,1,1,1,1},{0,0,1,1,1,0,0},{1,0,0,0,0,0,1}},//C
@@ -90,9 +89,7 @@ void loop() {
   if ((int)(-i) == strlen(phrase)*8+22) i = 0.f;
   
   clear_bmp();
-  //fill_bmp();
   text_stream((int)i);
-  //plot_letter(3,-3,7,7,&alphabet[15][0][0]);
   push();
 
   frame_end = micros();
@@ -152,5 +149,3 @@ void push() { //Pushes out the Bitmap to the LEDS, essentially the draw call fun
     
   }
 }
-
-
