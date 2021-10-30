@@ -1,39 +1,28 @@
+#include <EEPROM.h>
+
 #define DATA_PIN 12
 #define LATCH_PIN 11
 #define CLOCK_PIN 10
-#define BUTTON_PIN 9 //CHANGE TO NEW BOARD
+#define BUTTON_PIN 9
 #define COL_18 8
 #define COL_17 7
+
+volatile uint8_t scene;
+volatile uint8_t debounce = false;
+const uint8_t number_of_scenes = 3;
+
 
 //////////GOOD STUFF HERE///////
 //CHANGE THIS TO CHANGE SCROLLING TEXT PHRASE
 //(Capitilization matters, currently no support for some characters sorry, coming soon)
-const char* phrase = "GHOSTCABBIT";
+const char* phrase = "FARADAY";
 
 //Can draw static image using this, LED active low
 //(Change loop function to not clear bitmap and not text scroll)
-volatile uint8_t bitmap[16][18] = {
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-  {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-};
+volatile uint8_t bitmap[16][18];
 volatile int frame_start = 0;
 volatile int frame_end = 0;
 volatile int dt = 0;
-
 
 
 const uint8_t alphabet[][7][7] PROGMEM = { //Font 1 DOS font A-Z only
@@ -66,18 +55,39 @@ const uint8_t alphabet[][7][7] PROGMEM = { //Font 1 DOS font A-Z only
   {{0,0,0,0,0,0,0},{0,0,1,1,1,0,0},{0,1,1,1,0,0,1},{1,1,1,0,0,1,1},{1,1,0,0,1,1,0},{1,0,0,1,1,0,0},{0,0,0,0,0,0,0}},//Z
 };
 
+volatile uint8_t image[16][18] = {
+  {0,0,0,1,1,1,1,1,1,1,0,0,0,0,0,0,0,0},
+  {0,0,1,1,1,1,1,1,1,1,1,1,1,0,0,0,0,0},
+  {0,1,1,1,1,0,0,1,1,1,1,1,1,1,1,0,0,0},
+  {1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,0,0},
+  {1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,0},
+  {1,1,1,1,0,0,0,0,1,1,1,1,1,1,1,1,1,1},
+  {0,1,1,1,0,0,0,0,1,1,1,1,1,1,0,0,1,1},
+  {0,0,1,1,1,0,0,1,1,1,1,1,1,1,1,0,1,1},
+  {0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+  {0,0,0,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+  {0,0,0,0,1,1,0,1,1,1,1,1,1,1,1,1,1,1},
+  {0,0,0,0,1,1,1,0,0,1,1,1,1,1,1,1,1,0},
+  {0,0,0,0,0,1,1,1,1,0,0,0,0,0,0,1,0,0},
+  {0,0,0,0,0,1,1,1,1,1,1,1,1,1,1,0,0,0},
+  {0,0,0,0,0,1,1,1,1,1,1,1,1,0,0,0,0,0},
+  {0,0,0,0,0,1,1,1,1,1,1,0,0,0,0,0,0,0},
+};
+
 
 void setup() {
   Serial.begin(9600);
   pinMode(DATA_PIN,  OUTPUT);
   pinMode(LATCH_PIN, OUTPUT);
   pinMode(CLOCK_PIN, OUTPUT);
-  pinMode(BUTTON_PIN, INPUT); 
+  pinMode(BUTTON_PIN, INPUT_PULLUP); 
   pinMode(COL_18,    OUTPUT); //Col 18
   pinMode(COL_17,    OUTPUT); //Col 17
 
   digitalWrite(LATCH_PIN, LOW); 
-  //clear_bmp();
+  clear_bmp();
+
+  scene = EEPROM.read(0);
 }
 
 float i = 0.f;
@@ -85,14 +95,42 @@ void loop() {
   dt = frame_end - frame_start;
   frame_start = frame_end;
 
-  i -= dt / 60000.f;
-  if ((int)(-i) == strlen(phrase)*8+22) i = 0.f;
-  
-  clear_bmp();
-  text_stream((int)i);
-  push();
+  check_scene();
+  switch(scene) {
+    case 0:
+      fill_bmp();
+      push();
+    break;
+    case 1:
+      i -= dt / 60000.f;
+      if ((int)(-i) == strlen(phrase)*8+22) i = 0.f;
+      
+      clear_bmp();
+      text_stream((int)i);
+      push();
+    break;
+    case 2:
+      clear_bmp();
+      for (int i = 0; i < 16; i++) {
+        for (int j = 0; j < 18; j++) {
+          bitmap[i][j] = image[i][j];
+        }
+      }
+      push();
+  }
 
+  EEPROM.update(0, scene);
   frame_end = micros();
+}
+
+void check_scene() {
+  if (!digitalRead(BUTTON_PIN)) {
+    if (!debounce) scene++;
+    debounce = true;
+  }
+  else debounce = false;
+
+  if (scene >= number_of_scenes) scene = 0;
 }
 
 
